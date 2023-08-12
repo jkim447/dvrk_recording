@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="rqt_mypkg" name = "gui" type="rqt_mypkg" output="screen" cwd = "node"/>
+</launch>

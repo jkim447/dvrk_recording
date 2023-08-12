@@ -1,0 +1,9 @@
+<launch>
+
+  <include file="$(find dynamic_tutorials)/launch/dynamic_reconfigure_server.launch"/>
+  <include file="$(find rqt_mypkg)/launch/gui.launch"/>
+  <include file="$(find rqt_mypkg)/launch/record_from_rostopics.launch"/>
+
+   
+
+</launch>
