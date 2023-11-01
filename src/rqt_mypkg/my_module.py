@@ -65,10 +65,10 @@ class MyPlugin(Plugin):
         global isRecord
         if isRecord:
             self.dynamic_reconfigure_client.update_configuration({"isRecord": False})
-            print("isContact is set from true->false")
+            print("STOPPED RECORDING")
         else:
             self.dynamic_reconfigure_client.update_configuration({"isRecord": True})
-            print("isContact is set from false->true")
+            print("RECORDING NOW")
 
     def shutdown_plugin(self):
         # TODO unregister all publishers here
