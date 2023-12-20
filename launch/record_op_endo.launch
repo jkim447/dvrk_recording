@@ -1,0 +1,8 @@
+<launch>
+ 
+  <node pkg="rqt_mypkg" name = "publish_endo" type="publish_endoscope_images.py" output="screen" cwd = "node"/>
+  <include file="$(find dynamic_tutorials)/launch/dynamic_reconfigure_server.launch"/>
+  <include file="$(find rqt_mypkg)/launch/gui.launch"/>
+  <include file="$(find rqt_mypkg)/launch/record_from_rostopics_endo.launch"/> 
+
+</launch>

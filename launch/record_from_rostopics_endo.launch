@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="rqt_mypkg" name = "record" type="record_from_rostopics_w_endoscope.py" output="screen" cwd = "node"/>
+</launch>
