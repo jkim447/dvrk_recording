@@ -4,6 +4,6 @@
   <include file="$(find dynamic_tutorials)/launch/dynamic_reconfigure_server.launch"/>
   <include file="$(find rqt_mypkg)/launch/gui.launch"/>
   <!-- <include file="$(find rqt_mypkg)/launch/record_from_rostopics_endo_Si.launch"/> -->
-  <node pkg="rqt_mypkg" name = "recording_operation" type="record_from_rostopics_long_term.py" output="screen" cwd = "node"/>
+  <node pkg="rqt_mypkg" name = "recording_operation" type="record_from_rostopics_long_term_master.py" output="screen" cwd = "node"/>
   <!-- <node pkg="rqt_mypkg" name = "recording_operation" type="record_from_rostopics_long_term_csv_save_on_the_fly.py" output="screen" cwd = "node"/> -->
 </launch>

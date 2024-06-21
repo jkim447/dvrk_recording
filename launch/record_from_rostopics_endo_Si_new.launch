@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="rqt_mypkg" name = "record" type="recording_gui.py" output="screen" cwd = "node"/>
+</launch>

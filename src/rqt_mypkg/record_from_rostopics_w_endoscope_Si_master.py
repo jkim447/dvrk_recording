@@ -31,8 +31,7 @@ def signal_handler(sig, frame):
 # Set up signal handler for graceful shutdown
 signal.signal(signal.SIGINT, signal_handler)
 
-wrist_image_sav_res = (640, 480)
-endo_image_save_res = (960, 540)
+image_sav_res = (960, 540) # (640, 480)
 print_execution_time_every_n_seconds = 5
 
 # Initialize isRecord - otherwise it throws an error in main loop if "dynamic_reconfigure_callback" not called yet
@@ -72,30 +71,9 @@ psm2_js = psm2_set_js = None  #PSM2/measured_js, setpoint_js
 psm3_js = psm3_set_js = None  #PSM3/measured_js, setpoint_js
 ecm_js = ecm_set_js = None # ECM/measured_js, setpoint_js
 
-class RecordingManager:
-    def __init__(self):
-        self.vid_left = None
-        self.vid_right = None
-        self.vid_psm1_endo = None
-        self.vid_psm2_endo = None
-
-    def start_new_recording(self):
-        time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')# *'X264' is not supported
-        self.vid_left = cv2.VideoWriter('_recordings_long_term/endoscope_left_' + time_stamp + '.mp4', fourcc, 30, endo_image_save_res)
-        self.vid_right = cv2.VideoWriter('_recordings_long_term/endoscope_right_' + time_stamp + '.mp4', fourcc, 30, endo_image_save_res)
-        self.vid_psm1_endo = cv2.VideoWriter('_recordings_long_term/wrist_right_' + time_stamp + '.mp4', fourcc, 30, wrist_image_sav_res)
-        self.vid_psm2_endo = cv2.VideoWriter('_recordings_long_term/wrist_left_' + time_stamp + '.mp4', fourcc, 30, wrist_image_sav_res)
-
-    def stop_current_recording(self):
-        if self.vid_left.isOpened():
-            self.vid_left.release()
-        if self.vid_right.isOpened():
-            self.vid_right.release()
-        if self.vid_psm1_endo.isOpened():
-            self.vid_psm1_endo.release()
-        if self.vid_psm2_endo.isOpened():
-            self.vid_psm2_endo.release()
+# Global variables for MTML and MTMR
+mtml_gripper_js = mtml_measured_cp = mtml_measured_js = None
+mtmr_gripper_js = mtmr_measured_cp = mtmr_measured_js = None
 
 class ros_topics:
 
@@ -151,7 +129,18 @@ class ros_topics:
     self.sub14 = rospy.Subscriber("/PSM3/setpoint_js", JointState, self.c14)
     self.sub15 = rospy.Subscriber("/ECM/measured_js", JointState, self.c15)
     self.sub16 = rospy.Subscriber("/ECM/setpoint_js", JointState, self.c16)
-    
+
+    # MTML
+    self.mtml_gripper_js_sub = rospy.Subscriber("/MTML/gripper/measured_js", JointState, self.get_mtml_gripper_js)
+    self.mtml_measured_cp_sub = rospy.Subscriber("/MTML/measured_cp", PoseStamped, self.get_mtml_measured_cp)
+    self.mtml_measured_js_sub = rospy.Subscriber("/MTML/measured_js", JointState, self.get_mtml_measured_js)
+
+    # MTMR
+    self.mtmr_gripper_js_sub = rospy.Subscriber("/MTMR/gripper/measured_js", JointState, self.get_mtmr_gripper_js)
+    self.mtmr_measured_cp_sub = rospy.Subscriber("/MTMR/measured_cp", PoseStamped, self.get_mtmr_measured_cp)
+    self.mtmr_measured_js_sub = rospy.Subscriber("/MTMR/measured_js", JointState, self.get_mtmr_measured_js)
+
+
   def c1(self, data):
     global suj1_pose
     suj1_pose = data.pose
@@ -216,6 +205,31 @@ class ros_topics:
   def c16(self, data):
     global ecm_set_js
     ecm_set_js = data.position
+      
+  def get_mtml_gripper_js(self, data):
+      global mtml_gripper_js
+      mtml_gripper_js = data.position
+
+  def get_mtml_measured_cp(self, data):
+      global mtml_measured_cp
+      mtml_measured_cp = data.pose
+
+  def get_mtml_measured_js(self, data):
+      global mtml_measured_js
+      mtml_measured_js = data.position
+
+  def get_mtmr_gripper_js(self, data):
+      global mtmr_gripper_js
+      mtmr_gripper_js = data.position
+
+  def get_mtmr_measured_cp(self, data):
+      global mtmr_measured_cp
+      mtmr_measured_cp = data.pose
+
+  def get_mtmr_measured_js(self, data):
+      global mtmr_measured_js
+      mtmr_measured_js = data.position
+    
 
   def dynamic_reconfigure_callback(self, config):
     global isRecord
@@ -301,6 +315,7 @@ def image_saver(queue):
     if item is None:
       break  # None is our signal to stop
     filename, image = item
+    # print(image)
     cv2.imwrite(filename, image)
     queue.task_done()
 
@@ -328,14 +343,12 @@ time.sleep(1)
 
 execution_times_list = []
 
-rm = RecordingManager()
-
 while(True):
   # Display the average execution time every n seconds
   if len(execution_times_list) == ros_fps*print_execution_time_every_n_seconds:
-    #   print(f"Average execution time (publish+show wrist camera frames): {np.mean(execution_times_list)*1000:.2f} ms")
+      # print(f"Average execution time (publish+show wrist camera frames): {np.mean(execution_times_list)*1000:.2f} ms")
       execution_times_list = []
-    #   print(f"Current queue sizes: {image_queue.qsize()}")
+      # print(f"Current queue sizes: {image_queue.qsize()}")
   
       # Publish wrist camera images + visualize them with the DaVinci Endoscope camera
   with measure_execution_time(execution_times_list):
@@ -343,8 +356,6 @@ while(True):
       # create a new dir in the beginning
       
       if requiresNewDir:
-        rm.start_new_recording()
-        
         time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         ep_dir = os.path.join("_recordings", time_stamp)
         left_img_dir = os.path.join(ep_dir, "left_img_dir")
@@ -357,12 +368,12 @@ while(True):
         num_frames = 0
         ee_points = []
 
-        # if not os.path.exists(ep_dir):
-        #   os.makedirs(ep_dir)
-        #   os.makedirs(left_img_dir)
-        #   os.makedirs(right_img_dir)
-        #   os.makedirs(endo_p1_dir)
-        #   os.makedirs(endo_p2_dir)
+        if not os.path.exists(ep_dir):
+          os.makedirs(ep_dir)
+          os.makedirs(left_img_dir)
+          os.makedirs(right_img_dir)
+          os.makedirs(endo_p1_dir)
+          os.makedirs(endo_p2_dir)
 
         requiresNewDir = False
         # since we just made a new dir, we need to save csv later
@@ -370,74 +381,96 @@ while(True):
       
       # PyKDL.Frame
       ee_points.append([
-      kinematics_timestamp,
-      #PSM1
-      psm1_pose.position.x, psm1_pose.position.y, psm1_pose.position.z, # PSM1
-      psm1_pose.orientation.x, psm1_pose.orientation.y, psm1_pose.orientation.z, psm1_pose.orientation.w,
-      psm1_sp.position.x, psm1_sp.position.y, psm1_sp.position.z,
-      psm1_sp.orientation.x, psm1_sp.orientation.y, psm1_sp.orientation.z, psm1_sp.orientation.w,
-      psm1_jaw, psm1_jaw_sp,
-      psm1_rcm_pose.position.x, psm1_rcm_pose.position.y, psm1_rcm_pose.position.z,
-      psm1_rcm_pose.orientation.x, psm1_rcm_pose.orientation.y, psm1_rcm_pose.orientation.z, psm1_rcm_pose.orientation.w,
-      
-      # PSM2
-      psm2_pose.position.x, psm2_pose.position.y, psm2_pose.position.z, # PSM 2
-      psm2_pose.orientation.x, psm2_pose.orientation.y, psm2_pose.orientation.z, psm2_pose.orientation.w,
-      psm2_sp.position.x, psm2_sp.position.y, psm2_sp.position.z,
-      psm2_sp.orientation.x, psm2_sp.orientation.y, psm2_sp.orientation.z, psm2_sp.orientation.w,
-      psm2_jaw, psm2_jaw_sp,
-      psm2_rcm_pose.position.x, psm2_rcm_pose.position.y, psm2_rcm_pose.position.z,
-      psm2_rcm_pose.orientation.x, psm2_rcm_pose.orientation.y, psm2_rcm_pose.orientation.z, psm2_rcm_pose.orientation.w,
-      # ECM
-      ecm_pose.position.x, ecm_pose.position.y, ecm_pose.position.z, # ECM
-      ecm_pose.orientation.x, ecm_pose.orientation.y, ecm_pose.orientation.z, ecm_pose.orientation.w,
-      # ECM RCM
-      ecm_rcm_pose.position.x, ecm_rcm_pose.position.y, ecm_rcm_pose.position.z,
-      ecm_rcm_pose.orientation.x, ecm_rcm_pose.orientation.y, ecm_rcm_pose.orientation.z, ecm_rcm_pose.orientation.w,
-      # suj poses
-      suj1_pose.position.x, suj1_pose.position.y, suj1_pose.position.z,
-      suj1_pose.orientation.x, suj1_pose.orientation.y, suj1_pose.orientation.z, suj1_pose.orientation.w,
-      suj1_jp[0], suj1_jp[1], suj1_jp[2], suj1_jp[3],
+        kinematics_timestamp,
+        #PSM1
+        psm1_pose.position.x, psm1_pose.position.y, psm1_pose.position.z, # PSM1
+        psm1_pose.orientation.x, psm1_pose.orientation.y, psm1_pose.orientation.z, psm1_pose.orientation.w,
+        psm1_sp.position.x, psm1_sp.position.y, psm1_sp.position.z,
+        psm1_sp.orientation.x, psm1_sp.orientation.y, psm1_sp.orientation.z, psm1_sp.orientation.w,
+        psm1_jaw, psm1_jaw_sp,
+        psm1_rcm_pose.position.x, psm1_rcm_pose.position.y, psm1_rcm_pose.position.z,
+        psm1_rcm_pose.orientation.x, psm1_rcm_pose.orientation.y, psm1_rcm_pose.orientation.z, psm1_rcm_pose.orientation.w,
+        
+        # PSM2
+        psm2_pose.position.x, psm2_pose.position.y, psm2_pose.position.z, # PSM 2
+        psm2_pose.orientation.x, psm2_pose.orientation.y, psm2_pose.orientation.z, psm2_pose.orientation.w,
+        psm2_sp.position.x, psm2_sp.position.y, psm2_sp.position.z,
+        psm2_sp.orientation.x, psm2_sp.orientation.y, psm2_sp.orientation.z, psm2_sp.orientation.w,
+        psm2_jaw, psm2_jaw_sp,
+        psm2_rcm_pose.position.x, psm2_rcm_pose.position.y, psm2_rcm_pose.position.z,
+        psm2_rcm_pose.orientation.x, psm2_rcm_pose.orientation.y, psm2_rcm_pose.orientation.z, psm2_rcm_pose.orientation.w,
+        # ECM
+        ecm_pose.position.x, ecm_pose.position.y, ecm_pose.position.z, # ECM
+        ecm_pose.orientation.x, ecm_pose.orientation.y, ecm_pose.orientation.z, ecm_pose.orientation.w,
+        # ECM RCM
+        ecm_rcm_pose.position.x, ecm_rcm_pose.position.y, ecm_rcm_pose.position.z,
+        ecm_rcm_pose.orientation.x, ecm_rcm_pose.orientation.y, ecm_rcm_pose.orientation.z, ecm_rcm_pose.orientation.w,
+        # suj poses
+        suj1_pose.position.x, suj1_pose.position.y, suj1_pose.position.z,
+        suj1_pose.orientation.x, suj1_pose.orientation.y, suj1_pose.orientation.z, suj1_pose.orientation.w,
+        suj1_jp[0], suj1_jp[1], suj1_jp[2], suj1_jp[3],
 
-      suj2_pose.position.x, suj2_pose.position.y, suj2_pose.position.z,
-      suj2_pose.orientation.x, suj2_pose.orientation.y, suj2_pose.orientation.z, suj2_pose.orientation.w,
-      suj2_jp[0], suj2_jp[1], suj2_jp[2], suj2_jp[3],
+        suj2_pose.position.x, suj2_pose.position.y, suj2_pose.position.z,
+        suj2_pose.orientation.x, suj2_pose.orientation.y, suj2_pose.orientation.z, suj2_pose.orientation.w,
+        suj2_jp[0], suj2_jp[1], suj2_jp[2], suj2_jp[3],
 
-      suj3_pose.position.x, suj3_pose.position.y, suj3_pose.position.z,
-      suj3_pose.orientation.x, suj3_pose.orientation.y, suj3_pose.orientation.z, suj3_pose.orientation.w,
-      suj3_jp[0], suj3_jp[1], suj3_jp[2], suj3_jp[3],
+        suj3_pose.position.x, suj3_pose.position.y, suj3_pose.position.z,
+        suj3_pose.orientation.x, suj3_pose.orientation.y, suj3_pose.orientation.z, suj3_pose.orientation.w,
+        suj3_jp[0], suj3_jp[1], suj3_jp[2], suj3_jp[3],
 
-      suj_ecm_pose.position.x, suj_ecm_pose.position.y, suj_ecm_pose.position.z,
-      suj_ecm_pose.orientation.x, suj_ecm_pose.orientation.y, suj_ecm_pose.orientation.z, suj_ecm_pose.orientation.w,
-      suj_ecm_jp[0], suj_ecm_jp[1], suj_ecm_jp[2], suj_ecm_jp[3],
+        suj_ecm_pose.position.x, suj_ecm_pose.position.y, suj_ecm_pose.position.z,
+        suj_ecm_pose.orientation.x, suj_ecm_pose.orientation.y, suj_ecm_pose.orientation.z, suj_ecm_pose.orientation.w,
+        suj_ecm_jp[0], suj_ecm_jp[1], suj_ecm_jp[2], suj_ecm_jp[3],
 
-      # joints
-      psm1_js[0], psm1_js[1], psm1_js[2], psm1_js[3], psm1_js[4], psm1_js[5],
-      psm1_set_js[0], psm1_set_js[1], psm1_set_js[2], psm1_set_js[3], psm1_set_js[4], psm1_set_js[5],
+        # joints
+        psm1_js[0], psm1_js[1], psm1_js[2], psm1_js[3], psm1_js[4], psm1_js[5],
+        psm1_set_js[0], psm1_set_js[1], psm1_set_js[2], psm1_set_js[3], psm1_set_js[4], psm1_set_js[5],
 
-      psm2_js[0], psm2_js[1], psm2_js[2], psm2_js[3], psm2_js[4], psm2_js[5],
-      psm2_set_js[0], psm2_set_js[1], psm2_set_js[2], psm2_set_js[3], psm2_set_js[4], psm2_set_js[5],
+        psm2_js[0], psm2_js[1], psm2_js[2], psm2_js[3], psm2_js[4], psm2_js[5],
+        psm2_set_js[0], psm2_set_js[1], psm2_set_js[2], psm2_set_js[3], psm2_set_js[4], psm2_set_js[5],
 
-      psm3_js[0], psm3_js[1], psm3_js[2], psm3_js[3], psm3_js[4], psm3_js[5],
-      psm3_set_js[0], psm3_set_js[1], psm3_set_js[2], psm3_set_js[3], psm3_set_js[4], psm3_set_js[5],
+        psm3_js[0], psm3_js[1], psm3_js[2], psm3_js[3], psm3_js[4], psm3_js[5],
+        psm3_set_js[0], psm3_set_js[1], psm3_set_js[2], psm3_set_js[3], psm3_set_js[4], psm3_set_js[5],
 
-      ecm_js[0], ecm_js[1], ecm_js[2], ecm_js[3],
-      ecm_set_js[0], ecm_set_js[1], ecm_set_js[2], ecm_set_js[3]
+        ecm_js[0], ecm_js[1], ecm_js[2], ecm_js[3],
+        ecm_set_js[0], ecm_set_js[1], ecm_set_js[2], ecm_set_js[3],
+        # MTML
+        mtml_gripper_js[0],
+        mtml_measured_cp.position.x, mtml_measured_cp.position.y, mtml_measured_cp.position.z,
+        mtml_measured_cp.orientation.x, mtml_measured_cp.orientation.y, mtml_measured_cp.orientation.z, mtml_measured_cp.orientation.w,
+        mtml_measured_js[0], mtml_measured_js[1], mtml_measured_js[2], mtml_measured_js[3], mtml_measured_js[4], mtml_measured_js[5], mtml_measured_js[6],
+        # MTMR
+        mtmr_gripper_js[0],
+        mtmr_measured_cp.position.x, mtmr_measured_cp.position.y, mtmr_measured_cp.position.z,
+        mtmr_measured_cp.orientation.x, mtmr_measured_cp.orientation.y, mtmr_measured_cp.orientation.z, mtmr_measured_cp.orientation.w,
+        mtmr_measured_js[0], mtmr_measured_js[1], mtmr_measured_js[2], mtmr_measured_js[3], mtmr_measured_js[4], mtmr_measured_js[5], mtmr_measured_js[6]
       ])
       
-    #   save_name_left = os.path.join(left_img_dir, f"frame{num_frames:06d}_left.jpg")
-    #   save_name_right = os.path.join(right_img_dir, f"frame{num_frames:06d}_right.jpg")
-    #   save_name_endo_p1 = os.path.join(endo_p1_dir, f"frame{num_frames:06d}_psm1.jpg")
-    #   save_name_endo_p2 = os.path.join(endo_p2_dir, f"frame{num_frames:06d}_psm2.jpg")
+      # save frame
+      # save_name_left = os.path.join(left_img_dir, f"frame{num_frames:06d}_{usb_image_left_timestamp}_left.jpg")
+      # save_name_right = os.path.join(right_img_dir, f"frame{num_frames:06d}_{usb_image_right_timestamp}_right.jpg")
+      # save_name_endo_p1 = os.path.join(endo_p1_dir, f"frame{num_frames:06d}_{endo_cam_psm1_timestamp}_psm1.jpg")
+      # save_name_endo_p2 = os.path.join(endo_p2_dir, f"frame{num_frames:06d}_{endo_cam_psm2_timestamp}_psm2.jpg")
+      save_name_left = os.path.join(left_img_dir, f"frame{num_frames:06d}_left.jpg")
+      save_name_right = os.path.join(right_img_dir, f"frame{num_frames:06d}_right.jpg")
+      save_name_endo_p1 = os.path.join(endo_p1_dir, f"frame{num_frames:06d}_psm1.jpg")
+      save_name_endo_p2 = os.path.join(endo_p2_dir, f"frame{num_frames:06d}_psm2.jpg")
 
-      rm.vid_left.write(cv2.cvtColor(cv2.resize(usb_image_left, endo_image_save_res), cv2.COLOR_BGR2RGB))
-      rm.vid_right.write(cv2.cvtColor(cv2.resize(usb_image_right, endo_image_save_res), cv2.COLOR_BGR2RGB))
-      rm.vid_psm1_endo.write(cv2.resize(endo_cam_psm1, wrist_image_sav_res))
-      rm.vid_psm2_endo.write(cv2.resize(endo_cam_psm2, wrist_image_sav_res))
+      if image_sav_res is None:
+        image_queue.put((save_name_left, cv2.cvtColor(usb_image_left, cv2.COLOR_BGR2RGB)))
+        image_queue.put((save_name_right, cv2.cvtColor(usb_image_right, cv2.COLOR_BGR2RGB)))
+        image_queue.put((save_name_endo_p1, endo_cam_psm1))
+        image_queue.put((save_name_endo_p2, endo_cam_psm2))
+      else:
+        image_queue.put((save_name_left, cv2.cvtColor(cv2.resize(usb_image_left, image_sav_res), cv2.COLOR_BGR2RGB)))
+        image_queue.put((save_name_right, cv2.cvtColor(cv2.resize(usb_image_right, image_sav_res), cv2.COLOR_BGR2RGB)))
+        image_queue.put((save_name_endo_p1, endo_cam_psm1))
+        image_queue.put((save_name_endo_p2, endo_cam_psm2))
+
       num_frames = num_frames + 1
 
       if num_frames % 100 == 0:
-          pass
+        pass
         # print(f"Queue size is {image_queue.qsize()}")
 
       if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -506,16 +539,23 @@ while(True):
           "psm3_set_js[0]", "psm3_set_js[1]", "psm3_set_js[2]", "psm3_set_js[3]", "psm3_set_js[4]", "psm3_set_js[5]",
 
           "ecm_js[0]", "ecm_js[1]", "ecm_js[2]", "ecm_js[3]",
-          "ecm_set_js[0]", "ecm_set_js[1]", "ecm_set_js[2]", "ecm_set_js[3]"
-        ]
+          "ecm_set_js[0]", "ecm_set_js[1]", "ecm_set_js[2]", "ecm_set_js[3]",
+          # MTML
+          "mtml_gripper_js[0]",
+          "mtml_measured_cp.position.x", "mtml_measured_cp.position.y", "mtml_measured_cp.position.z",
+          "mtml_measured_cp.orientation.x", "mtml_measured_cp.orientation.y", "mtml_measured_cp.orientation.z", "mtml_measured_cp.orientation.w",
+          "mtml_measured_js[0]", "mtml_measured_js[1]", "mtml_measured_js[2]", "mtml_measured_js[3]", "mtml_measured_js[4]", "mtml_measured_js[5]", "mtml_measured_js[6]",
+          # MTMR
+          "mtmr_gripper_js[0]",
+          "mtmr_measured_cp.position.x", "mtmr_measured_cp.position.y", "mtmr_measured_cp.position.z",
+          "mtmr_measured_cp.orientation.x", "mtmr_measured_cp.orientation.y", "mtmr_measured_cp.orientation.z", "mtmr_measured_cp.orientation.w",
+          "mtmr_measured_js[0]", "mtmr_measured_js[1]", "mtmr_measured_js[2]", "mtmr_measured_js[3]", "mtmr_measured_js[4]", "mtmr_measured_js[5]", "mtmr_measured_js[5]"
+      ]
         
         csv_data = pd.DataFrame(ee_points)
-        time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-        ee_save_path = os.path.join("_recordings_long_term", "ee_csv_" + str(time_stamp) + ".csv")
+        ee_save_path = os.path.join(ep_dir, "ee_csv.csv")
         csv_data.to_csv(ee_save_path, index = False, header = header)
 
-        rm.stop_current_recording()    
-        
         # make sure to set this back to False
         requiresSaveCsv = False
     

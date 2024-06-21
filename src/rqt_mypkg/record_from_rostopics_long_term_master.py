@@ -72,6 +72,10 @@ psm2_js = psm2_set_js = None  #PSM2/measured_js, setpoint_js
 psm3_js = psm3_set_js = None  #PSM3/measured_js, setpoint_js
 ecm_js = ecm_set_js = None # ECM/measured_js, setpoint_js
 
+# Global variables for MTML and MTMR
+mtml_gripper_js = mtml_measured_cp = mtml_measured_js = None
+mtmr_gripper_js = mtmr_measured_cp = mtmr_measured_js = None
+
 class RecordingManager:
     def __init__(self):
         self.vid_left = None
@@ -152,6 +156,17 @@ class ros_topics:
     self.sub15 = rospy.Subscriber("/ECM/measured_js", JointState, self.c15)
     self.sub16 = rospy.Subscriber("/ECM/setpoint_js", JointState, self.c16)
     
+    # MTML
+    self.mtml_gripper_js_sub = rospy.Subscriber("/MTML/gripper/measured_js", JointState, self.get_mtml_gripper_js)
+    self.mtml_measured_cp_sub = rospy.Subscriber("/MTML/measured_cp", PoseStamped, self.get_mtml_measured_cp)
+    self.mtml_measured_js_sub = rospy.Subscriber("/MTML/measured_js", JointState, self.get_mtml_measured_js)
+
+    # MTMR
+    self.mtmr_gripper_js_sub = rospy.Subscriber("/MTMR/gripper/measured_js", JointState, self.get_mtmr_gripper_js)
+    self.mtmr_measured_cp_sub = rospy.Subscriber("/MTMR/measured_cp", PoseStamped, self.get_mtmr_measured_cp)
+    self.mtmr_measured_js_sub = rospy.Subscriber("/MTMR/measured_js", JointState, self.get_mtmr_measured_js)
+
+    
   def c1(self, data):
     global suj1_pose
     suj1_pose = data.pose
@@ -216,6 +231,30 @@ class ros_topics:
   def c16(self, data):
     global ecm_set_js
     ecm_set_js = data.position
+    
+  def get_mtml_gripper_js(self, data):
+    global mtml_gripper_js
+    mtml_gripper_js = data.position
+
+  def get_mtml_measured_cp(self, data):
+      global mtml_measured_cp
+      mtml_measured_cp = data.pose
+
+  def get_mtml_measured_js(self, data):
+      global mtml_measured_js
+      mtml_measured_js = data.position
+
+  def get_mtmr_gripper_js(self, data):
+      global mtmr_gripper_js
+      mtmr_gripper_js = data.position
+
+  def get_mtmr_measured_cp(self, data):
+      global mtmr_measured_cp
+      mtmr_measured_cp = data.pose
+
+  def get_mtmr_measured_js(self, data):
+      global mtmr_measured_js
+      mtmr_measured_js = data.position
 
   def dynamic_reconfigure_callback(self, config):
     global isRecord
@@ -422,8 +461,19 @@ while(True):
       psm3_set_js[0], psm3_set_js[1], psm3_set_js[2], psm3_set_js[3], psm3_set_js[4], psm3_set_js[5],
 
       ecm_js[0], ecm_js[1], ecm_js[2], ecm_js[3],
-      ecm_set_js[0], ecm_set_js[1], ecm_set_js[2], ecm_set_js[3]
-      ])
+      ecm_set_js[0], ecm_set_js[1], ecm_set_js[2], ecm_set_js[3],
+      
+      # MTML
+      mtml_gripper_js[0],
+      mtml_measured_cp.position.x, mtml_measured_cp.position.y, mtml_measured_cp.position.z,
+      mtml_measured_cp.orientation.x, mtml_measured_cp.orientation.y, mtml_measured_cp.orientation.z, mtml_measured_cp.orientation.w,
+      mtml_measured_js[0], mtml_measured_js[1], mtml_measured_js[2], mtml_measured_js[3], mtml_measured_js[4], mtml_measured_js[5], mtml_measured_js[6],
+      # MTMR
+      mtmr_gripper_js[0],
+      mtmr_measured_cp.position.x, mtmr_measured_cp.position.y, mtmr_measured_cp.position.z,
+      mtmr_measured_cp.orientation.x, mtmr_measured_cp.orientation.y, mtmr_measured_cp.orientation.z, mtmr_measured_cp.orientation.w,
+      mtmr_measured_js[0], mtmr_measured_js[1], mtmr_measured_js[2], mtmr_measured_js[3], mtmr_measured_js[4], mtmr_measured_js[5], mtmr_measured_js[6]
+    ])
       
     #   save_name_left = os.path.join(left_img_dir, f"frame{num_frames:06d}_left.jpg")
     #   save_name_right = os.path.join(right_img_dir, f"frame{num_frames:06d}_right.jpg")
@@ -506,7 +556,18 @@ while(True):
           "psm3_set_js[0]", "psm3_set_js[1]", "psm3_set_js[2]", "psm3_set_js[3]", "psm3_set_js[4]", "psm3_set_js[5]",
 
           "ecm_js[0]", "ecm_js[1]", "ecm_js[2]", "ecm_js[3]",
-          "ecm_set_js[0]", "ecm_set_js[1]", "ecm_set_js[2]", "ecm_set_js[3]"
+          "ecm_set_js[0]", "ecm_set_js[1]", "ecm_set_js[2]", "ecm_set_js[3]",
+          
+          # MTML
+          "mtml_gripper_js[0]",
+          "mtml_measured_cp.position.x", "mtml_measured_cp.position.y", "mtml_measured_cp.position.z",
+          "mtml_measured_cp.orientation.x", "mtml_measured_cp.orientation.y", "mtml_measured_cp.orientation.z", "mtml_measured_cp.orientation.w",
+          "mtml_measured_js[0]", "mtml_measured_js[1]", "mtml_measured_js[2]", "mtml_measured_js[3]", "mtml_measured_js[4]", "mtml_measured_js[5]", "mtml_measured_js[6]",
+          # MTMR
+          "mtmr_gripper_js[0]",
+          "mtmr_measured_cp.position.x", "mtmr_measured_cp.position.y", "mtmr_measured_cp.position.z",
+          "mtmr_measured_cp.orientation.x", "mtmr_measured_cp.orientation.y", "mtmr_measured_cp.orientation.z", "mtmr_measured_cp.orientation.w",
+          "mtmr_measured_js[0]", "mtmr_measured_js[1]", "mtmr_measured_js[2]", "mtmr_measured_js[3]", "mtmr_measured_js[4]", "mtmr_measured_js[5]", "mtmr_measured_js[5]"
         ]
         
         csv_data = pd.DataFrame(ee_points)

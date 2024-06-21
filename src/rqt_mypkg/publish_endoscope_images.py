@@ -10,7 +10,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import rospy
 
-from record_w_endoscope_Si.utils import measure_execution_time
+from utils import measure_execution_time
 
 
 def signal_handler(sig, frame, cap1, cap2):
