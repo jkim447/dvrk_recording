@@ -56,9 +56,9 @@ while not rospy.is_shutdown():
  pub1.publish(bridge.cv2_to_imgmsg(frame1, encoding="passthrough"))
  pub2.publish(bridge.cv2_to_imgmsg(frame2, encoding="passthrough"))
  
- # Display the resulting frame
- cv.imshow('right_wrist', frame1)
- cv.imshow('left_wrist', frame2)
+#  # Display the resulting frame
+#  cv.imshow('right_wrist', frame1)
+#  cv.imshow('left_wrist', frame2)
 
  if cv.waitKey(1) == ord('q'):
     break
