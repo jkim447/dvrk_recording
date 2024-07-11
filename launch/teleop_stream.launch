@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="rqt_mypkg" name = "visualize_dvrk" type="visualize_daVinci_endoscope.py" output="screen" cwd = "node"/>
+  <!-- <node pkg="rqt_mypkg" name = "visualize2" type="visualize_env.py" output="screen" cwd = "node"/> -->
+</launch>
